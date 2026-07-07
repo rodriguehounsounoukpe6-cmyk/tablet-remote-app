@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Telecommande tablette</title>
+<style>
+  :root{
+    --bg:#0d0f12; --panel:#15181d; --line:#242a32;
+    --amber:#ffb454; --amber-dim:#7a5a2c;
+    --text:#e8e6e1; --text-dim:#8b9098; --red:#e8555f; --green:#5fd898;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--text);
+    font-family:'SF Mono','JetBrains Mono',ui-monospace,Consolas,monospace;
+    height:100%; overflow-x:hidden; user-select:none; }
+  .frame{ max-width:480px; margin:0 auto; padding:18px 18px 40px; }
+  .head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;}
+  .head h1{ font-size:15px; letter-spacing:.14em; text-transform:uppercase; margin:0;}
+  .head .tag{ font-size:11px; color:var(--text-dim); letter-spacing:.05em;}
+  .status-row{ display:flex; align-items:center; gap:8px; margin:14px 0 22px; padding:10px 12px;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; font-size:12px; color:var(--text-dim);}
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--red); flex-shrink:0; transition:background .2s;}
+  .dot.on{ background:var(--green); box-shadow:0 0 8px var(--green);}
+  #statusText{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  details.setup{ margin-bottom:22px; }
+  details.setup summary{ font-size:12px; color:var(--amber); letter-spacing:.05em; cursor:pointer; padding:4px 0;}
+  .setup-body{ margin-top:10px; display:flex; flex-direction:column; gap:8px;}
+  .setup-body input{ background:var(--panel); border:1px solid var(--line); color:var(--text);
+    padding:10px; border-radius:8px; font-family:inherit; font-size:13px; width:100%; }
+  .btn-line{ display:flex; gap:8px; }
+  .setup-body button{ flex:1; background:transparent; border:1px solid var(--amber-dim); color:var(--amber);
+    padding:10px; border-radius:8px; font-family:inherit; font-size:12px; letter-spacing:.05em; }
+  .setup-body button:active{ background:var(--amber-dim); }
+  .pad-wrap{ display:flex; justify-content:center; margin:30px 0 26px; }
+  .dpad{ position:relative; width:230px; height:230px; }
+  .dpad button{ position:absolute; width:74px; height:74px; background:var(--panel);
+    border:1px solid var(--line); color:var(--text); font-size:22px; border-radius:14px; }
+  .dpad button:active{ background:var(--amber-dim); border-color:var(--amber); color:#0d0f12; }
+  .dpad .up{ top:0; left:78px; } .dpad .down{ top:156px; left:78px; }
+  .dpad .left{ top:78px; left:0; } .dpad .right{ top:78px; left:156px; }
+  .dpad .ok{ top:78px; left:78px; border-radius:50%; background:var(--amber); color:#0d0f12;
+    border-color:var(--amber); font-size:13px; letter-spacing:.05em; }
+  .dpad .ok:active{ background:#ffcd8a; }
+  .row-buttons{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
+  .row-buttons button{ background:var(--panel); border:1px solid var(--line); color:var(--text);
+    padding:14px 4px; border-radius:10px; font-size:11px; letter-spacing:.04em; font-family:inherit; }
+  .row-buttons button:active{ background:var(--amber-dim); border-color:var(--amber); }
+  .footer-note{ text-align:center; font-size:10px; color:var(--text-dim); margin-top:26px; letter-spacing:.04em; }
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="head"><h1>Telecommande</h1><span class="tag">App directe &middot; sans ADB</span></div>
+
+  <div class="status-row">
+    <div class="dot" id="dot"></div>
+    <div id="statusText">non configure</div>
+  </div>
+
+  <details class="setup" id="setupPanel" open>
+    <summary>Configuration de la tablette</summary>
+    <div class="setup-body">
+      <input id="ip" type="text" placeholder="IP de la tablette ex: 192.168.88.64" inputmode="decimal">
+      <div class="btn-line">
+        <button onclick="saveConfig()">Enregistrer</button>
+        <button onclick="testPing()">Tester la connexion</button>
+      </div>
+    </div>
+  </details>
+
+  <div class="pad-wrap">
+    <div class="dpad">
+      <button class="up" onclick="sendKey('up')">&#9650;</button>
+      <button class="left" onclick="sendKey('left')">&#9664;</button>
+      <button class="ok" onclick="sendKey('ok')">OK</button>
+      <button class="right" onclick="sendKey('right')">&#9654;</button>
+      <button class="down" onclick="sendKey('down')">&#9660;</button>
+    </div>
+  </div>
+
+  <div class="row-buttons">
+    <button onclick="sendKey('back')">RETOUR</button>
+    <button onclick="sendKey('home')">ACCUEIL</button>
+    <button onclick="sendKey('recent')">RECENTS</button>
+    <button onclick="sendKey('notifications')">NOTIFS</button>
+  </div>
+  <div class="row-buttons">
+    <button onclick="sendKey('vol_down')">VOL &minus;</button>
+    <button onclick="sendKey('vol_up')">VOL +</button>
+    <button onclick="sendKey('lock')">VERROUILLER</button>
+    <button onclick="testPing()">TESTER</button>
+  </div>
+
+  <div class="footer-note">fonctionne sans internet &middot; meme reseau WiFi requis</div>
+</div>
+
+<script>
+const dot = document.getElementById('dot');
+const statusText = document.getElementById('statusText');
+function setStatus(ok, msg){ dot.classList.toggle('on', !!ok); statusText.textContent = msg; }
+
+async function loadStatus(){
+  try{
+    const r = await fetch('/status');
+    const d = await r.json();
+    if(d.tablet_ip){ document.getElementById('ip').value = d.tablet_ip; setStatus(false, d.tablet_ip + ' (non teste)'); }
+    else setStatus(false, 'aucune tablette configuree');
+  }catch(e){ setStatus(false, 'serveur inaccessible'); }
+}
+
+async function saveConfig(){
+  const ip = document.getElementById('ip').value.trim();
+  if(!ip) return;
+  await fetch(`/config?ip=${encodeURIComponent(ip)}`);
+  setStatus(false, ip + ' enregistre - clique Tester');
+}
+
+async function testPing(){
+  await saveConfig();
+  setStatus(false, 'test en cours...');
+  try{
+    const r = await fetch('/ping');
+    const d = await r.json();
+    setStatus(d.ok, d.ok ? 'connecte a la tablette' : 'echec de connexion');
+    if(d.ok) document.getElementById('setupPanel').open = false;
+  }catch(e){ setStatus(false, 'erreur reseau'); }
+}
+
+async function sendKey(code){
+  try{
+    const r = await fetch('/key?code=' + code);
+    const d = await r.json();
+    if(!d.ok) setStatus(false, 'erreur: ' + (d.error || 'inconnue'));
+    else setStatus(true, 'connecte a la tablette');
+  }catch(e){ setStatus(false, 'serveur inaccessible'); }
+}
+
+loadStatus();
+</script>
+</body>
+</html>
